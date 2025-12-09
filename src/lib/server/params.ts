@@ -7,8 +7,11 @@ export function extractConnectionString(request: Request) {
 export function extractAuth(request: Request) {
   const url = new URL(request.url)
   const searchParams = new URLSearchParams(url.search)
+  const authType = searchParams.get('authType') || ''
+  // Handle case where authType is the string "undefined"
+  const normalizedAuthType = authType === 'undefined' ? '' : authType
   return {
-    authType: searchParams.get('authType') || '',
+    authType: normalizedAuthType,
     token: searchParams.get('token') || '',
     username: searchParams.get('username') || '',
     password: searchParams.get('password') || '',

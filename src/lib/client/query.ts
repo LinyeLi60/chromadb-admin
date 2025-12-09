@@ -13,10 +13,12 @@ export function useGetConfig() {
 }
 
 function authParamsString(config?: AppConfig) {
-  if (config?.authType === 'basic') {
-    return `&authType=basic&&username=${config.username}&password=${config.password}`
-  } else if (config?.authType === 'token') {
-    return `&authType=token&&token=${config.token}`
+  if (!config) return ''
+  const authType = config.authType
+  if (authType === 'basic' && config.username && config.password) {
+    return `&authType=basic&username=${config.username}&password=${config.password}`
+  } else if (authType === 'token' && config.token) {
+    return `&authType=token&token=${config.token}`
   } else {
     return ''
   }
@@ -49,8 +51,9 @@ export function useGetCollectionRecords(config?: AppConfig, collectionName?: str
         )
         return response.json()
       } else {
+        const authTypeParam = config?.authType && config.authType !== 'undefined' ? `&authType=${config.authType}` : ''
         const response = await fetch(
-          `/api/collections/${collectionName}/records?connectionString=${config?.connectionString}&tenant=${config?.tenant}&database=${config?.database}&authType=${config?.authType}${authParamsString(config)}`,
+          `/api/collections/${collectionName}/records?connectionString=${config?.connectionString}&tenant=${config?.tenant}&database=${config?.database}${authTypeParam}${authParamsString(config)}`,
           {
             method: 'POST',
             body: JSON.stringify({ query: query }),

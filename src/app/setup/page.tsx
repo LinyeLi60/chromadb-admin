@@ -23,7 +23,37 @@ export default function SetupPage() {
 
   useEffect(() => {
     if (appConfig != null && appConfig.connectionString) {
+      // Use saved config if exists
       setConnectionString(appConfig.connectionString)
+      if (appConfig.embeddingModelUrl) {
+        setEmbeddingModelUrl(appConfig.embeddingModelUrl)
+      }
+      if (appConfig.embeddingModel) {
+        setEmbeddingModel(appConfig.embeddingModel)
+      }
+    } else {
+      // Load default values from environment variables via API when no saved config exists
+      fetch('/api/config/defaults')
+        .then(res => res.json())
+        .then(data => {
+          // Format CHROMA_API: if it doesn't start with http:// or https://, add http://
+          if (data.chromaConnectionString) {
+            let chromaUrl = data.chromaConnectionString.trim()
+            if (chromaUrl && !chromaUrl.startsWith('http://') && !chromaUrl.startsWith('https://')) {
+              chromaUrl = 'http://' + chromaUrl
+            }
+            setConnectionString(chromaUrl)
+          }
+          if (data.embeddingModelUrl) {
+            setEmbeddingModelUrl(data.embeddingModelUrl)
+          }
+          if (data.embeddingModel) {
+            setEmbeddingModel(data.embeddingModel)
+          }
+        })
+        .catch(err => {
+          console.error('Failed to load default config:', err)
+        })
     }
   }, [appConfig])
 

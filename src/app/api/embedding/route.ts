@@ -26,6 +26,21 @@ export async function POST(request: Request) {
 
     let embedding: number[]
 
+    // Helper function to normalize URLs (remove trailing slashes)
+    const normalizeUrl = (url: string) => url.replace(/\/+$/, '')
+    
+    // Check if the modelUrl matches the configured OPENAI_BASE_URL
+    const envBaseUrl = process.env.OPENAI_BASE_URL ? normalizeUrl(process.env.OPENAI_BASE_URL) : null
+    const normalizedModelUrl = normalizeUrl(modelUrl)
+    const isUsingEnvConfig = envBaseUrl && (
+      normalizedModelUrl === envBaseUrl || 
+      normalizedModelUrl.startsWith(envBaseUrl + '/')
+    )
+    const shouldUseApiKey = isUsingEnvConfig || modelUrl.includes('api.openai.com')
+    const apiKey = shouldUseApiKey && process.env.OPENAI_API_KEY 
+      ? process.env.OPENAI_API_KEY 
+      : 'dummy-key'
+
     // Check if it is Ollama native API format
     if (modelUrl.includes('/api/embeddings') || modelUrl.includes('/api/embed')) {
       // Use Ollama native API format directly
@@ -49,12 +64,18 @@ export async function POST(request: Request) {
       embedding = data.embedding
     } else if (modelUrl.endsWith('/embeddings')) {
       // Full embeddings endpoint URL (LM Studio, etc.)
-      // Use fetch directly, without using OpenAI SDK
+      // Use fetch directly, but add Authorization header if API key is available
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      }
+      
+      if (shouldUseApiKey && process.env.OPENAI_API_KEY) {
+        headers['Authorization'] = `Bearer ${process.env.OPENAI_API_KEY}`
+      }
+      
       const response = await fetch(modelUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: headers,
         body: JSON.stringify({
           model: model,
           input: text,
@@ -73,9 +94,11 @@ export async function POST(request: Request) {
       embedding = data.data[0].embedding
     } else {
       // Use OpenAI SDK (for base URL: OpenAI, LM Studio, Ollama OpenAI compatible mode)
+      const baseURL = modelUrl || process.env.OPENAI_BASE_URL || undefined
+      
       const openai = new OpenAI({
-        apiKey: 'dummy-key', // Some embedding services don't require a key
-        baseURL: modelUrl,
+        apiKey: apiKey,
+        baseURL: baseURL,
       })
 
       const response = await openai.embeddings.create({

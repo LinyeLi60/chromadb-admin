@@ -2,10 +2,21 @@ import OpenAI from 'openai'
 import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
-  try {
-    const body = await request.json()
-    const { text, modelUrl, model = 'text-embedding-3-small' } = body
+  // Variables for error logging (defined outside try block)
+  let body: any = null
+  let modelUrl: string = ''
+  let model: string = 'text-embedding-3-small'
+  let apiKey: string = 'dummy-key'
+  let isUsingEnvConfig: boolean = false
+  let shouldUseApiKey: boolean = false
 
+  try {
+    body = await request.json()
+    const parsed = body
+    modelUrl = parsed.modelUrl || ''
+    model = parsed.model || 'text-embedding-3-small'
+
+    const text = parsed.text
     if (!text) {
       return NextResponse.json(
         {
@@ -32,12 +43,12 @@ export async function POST(request: Request) {
     // Check if the modelUrl matches the configured OPENAI_BASE_URL
     const envBaseUrl = process.env.OPENAI_BASE_URL ? normalizeUrl(process.env.OPENAI_BASE_URL) : null
     const normalizedModelUrl = normalizeUrl(modelUrl)
-    const isUsingEnvConfig = envBaseUrl && (
+    isUsingEnvConfig = !!(envBaseUrl && (
       normalizedModelUrl === envBaseUrl || 
       normalizedModelUrl.startsWith(envBaseUrl + '/')
-    )
-    const shouldUseApiKey = isUsingEnvConfig || modelUrl.includes('api.openai.com')
-    const apiKey = shouldUseApiKey && process.env.OPENAI_API_KEY 
+    ))
+    shouldUseApiKey = isUsingEnvConfig || modelUrl.includes('api.openai.com')
+    apiKey = shouldUseApiKey && process.env.OPENAI_API_KEY 
       ? process.env.OPENAI_API_KEY 
       : 'dummy-key'
 
@@ -117,10 +128,38 @@ export async function POST(request: Request) {
       dimension: embedding.length,
     })
   } catch (error) {
-    console.error('Embedding error:', error)
+    // Helper function to mask API key for logging (show first 7 and last 4 characters)
+    const maskApiKey = (key: string | undefined): string => {
+      if (!key || key === 'dummy-key') return key || 'not set'
+      if (key.length <= 11) return '***'
+      return `${key.substring(0, 7)}...${key.substring(key.length - 4)}`
+    }
+
+    // Log detailed error information for debugging
+    const errorDetails = {
+      message: (error as Error).message,
+      modelUrl: modelUrl || 'not provided',
+      model: model || 'not provided',
+      envBaseUrl: process.env.OPENAI_BASE_URL || 'not set',
+      envApiKey: maskApiKey(process.env.OPENAI_API_KEY),
+      usedApiKey: maskApiKey(apiKey),
+      usedBaseUrl: modelUrl || process.env.OPENAI_BASE_URL || 'not set',
+      isUsingEnvConfig,
+      shouldUseApiKey,
+    }
+
+    console.error('Embedding error details:', errorDetails)
+    console.error('Full error:', error)
+
     return NextResponse.json(
       {
         error: `Failed to get embedding: ${(error as Error).message}`,
+        debug: {
+          baseUrl: errorDetails.usedBaseUrl,
+          apiKey: errorDetails.usedApiKey,
+          modelUrl: errorDetails.modelUrl,
+          model: errorDetails.model,
+        },
       },
       { status: 500 }
     )
